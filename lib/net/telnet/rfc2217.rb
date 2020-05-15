@@ -81,7 +81,9 @@ module Net
         @modem_params['baud'] = 115200 unless @modem_params.key?('baud')
         @modem_params['data_bits'] = 8 unless @modem_params.key?('data_bits')
         @modem_params['stop_bits'] = 1 unless @modem_params.key?('stop_bits')
-        @modem_params['parity'] = (data_bits == 8 ? NONE : EVEN)
+        unless @modem_params.key?('parity')
+          @modem_params['parity'] = (data_bits == 8 ? NONE : EVEN)
+        end
         write_modem_params if telnet
       end
 
@@ -116,7 +118,7 @@ module Net
       def readpartial(length, outbuf = '')
         loop do
           # 0 is special and means 'read at least one control sequence'
-          break if length != 0 && @buffer.length != 0
+          break if length != 0 || @buffer.length != 0
 
           data = sock.sysread([length - @buffer.length, 64 * 1024].max)
 
