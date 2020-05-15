@@ -73,7 +73,12 @@ module Net
         telnet.write(IAC + WILL + COM_PORT_OPTION)
         sock.flush
         @buffer = ''
-        readpartial(0)
+        start = Time.now.to_f
+        loop do
+          raise "could not negotiate serial port in time" if Time.now.to_f - start > 5
+          break if @negotiated
+          readpartial(0)
+        end
       end
 
       def get_modem_params
@@ -121,8 +126,9 @@ module Net
 
       def readpartial(length, outbuf = '')
         loop do
-          # 0 is special and means 'read at least one control sequence'
-          break if length != 0 || @buffer.length != 0
+          # 0 is special and means "just see if there's data to read"
+          break if length != 0 && @buffer.length != 0
+          raise "could not negotiate serial port in first 1MB of data" if @buffer.length >= 1024 * 1024
 
           data = sock.sysread([length - @buffer.length, 64 * 1024].max)
 
@@ -131,12 +137,11 @@ module Net
             data.concat(sock.sysread(16))
           end
 
-          saw_control = false
           data = @telnet.preprocess(data) do |control|
-            saw_control = true
             if DO[0] == control[0] && COM_PORT_OPTION == control[1]
               # start negotiation
               write_modem_params
+              @negotiated = true
               true
             elsif DONT[0] == control[0] && COM_PORT_OPTION == control[1]
               raise "Serial port control not supported"
@@ -148,7 +153,8 @@ module Net
             end
           end
           @buffer.concat(data)
-          break if length == 0 && saw_control
+
+          break if length == 0
         end
 
         length = [length, @buffer.length].min
