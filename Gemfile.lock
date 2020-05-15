@@ -1,0 +1,23 @@
+PATH
+  remote: .
+  specs:
+    net-telnet-rfc2217 (0.0.1)
+      net-telnet (~> 0.2.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    byebug (9.0.6)
+    net-telnet (0.2.0)
+    rake (13.0.1)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  byebug (~> 9.0)
+  net-telnet-rfc2217!
+  rake (~> 13.0)
+
+BUNDLED WITH
+   2.1.4
