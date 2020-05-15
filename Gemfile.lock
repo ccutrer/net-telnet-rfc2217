@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    net-telnet-rfc2217 (0.0.1)
+    net-telnet-rfc2217 (0.0.2)
       net-telnet (~> 0.2.0)
 
 GEM

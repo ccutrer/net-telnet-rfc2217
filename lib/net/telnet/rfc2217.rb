@@ -8,6 +8,10 @@ Net::Telnet.prepend(Net::Telnet::RFC2217::TelnetExtensions)
 module Net
   class Telnet
     class RFC2217
+      class WaitReadable < RuntimeError
+        include ::IO::WaitReadable
+      end
+
       attr_reader :telnet
 
       COM_PORT_OPTION = 44.chr
@@ -136,7 +140,9 @@ module Net
               true
             elsif DONT[0] == control[0] && COM_PORT_OPTION == control[1]
               raise "Serial port control not supported"
-              false
+            elsif (WILL[0] == control[0] || DONT[0] == control[0]) && OPT_ECHO == control[1]
+              # just ignore echo requests
+              true
             else
               false
             end
@@ -151,6 +157,32 @@ module Net
         outbuf
       end
 
+      def read_nonblock(length, outbuf = '', options = {})
+        if outbuf == ({ exception: false })
+          options = outbuf
+          outbuf = ''
+        end
+        loop do
+          result = wait_readable(0)
+          if result == nil
+            raise WaitReadable unless options[:exception] == false
+            return :wait_readable
+          end
+          # we have to try to consume control characters first
+          readpartial(0)
+          # and then only do a real read if we have something
+          return readpartial(length, outbuf) unless @buffer.empty?
+          # otherwise loop and see if there's more there
+        end
+      end
+
+      def wait_readable(timeout = nil)
+        return true unless @buffer.empty?
+        result = sock.wait_readable(timeout)
+        result = self if result == sock
+        result
+      end
+
       def ungetbyte(b)
         @buffer.insert(0, b.chr)
       end
@@ -162,6 +194,10 @@ module Net
       def write(string)
         string = string.gsub(/#{IAC}/no, IAC + IAC)
         telnet.write(string)
+      end
+
+      def flush
+        sock.flush
       end
 
       def close
