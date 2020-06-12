@@ -124,6 +124,10 @@ module Net
         outbuf
       end
 
+      def readbyte
+        read(1)&.[](0)
+      end
+
       def readpartial(length, outbuf = '')
         loop do
           # 0 is special and means "just see if there's data to read"
