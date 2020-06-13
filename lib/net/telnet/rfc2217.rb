@@ -119,7 +119,7 @@ module Net
       def read(length, outbuf = '')
         readpartial(length, outbuf)
         while outbuf.length < length
-          outbuf.concat(length - outbuf.length)
+          outbuf.concat(readpartial(length - outbuf.length))
         end
         outbuf
       end
