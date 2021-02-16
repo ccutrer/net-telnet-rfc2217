@@ -14,43 +14,9 @@ module Net
 
       attr_reader :telnet
 
-      COM_PORT_OPTION = 44.chr
-
-      SET_BAUDRATE = 1.chr
-      SET_DATASIZE = 2.chr
-      SET_PARITY = 3.chr
-      SET_STOPSIZE = 4.chr
-      SET_CONTROL = 5.chr
-      NOTIFY_LINESTATE = 6.chr
-      NOTIFY_MODEMSTATE = 7.chr
-      FLOWCONTROL_SUSPEND = 8.chr
-      SET_LINESTATE_MASK = 10.chr
-      SET_MODEMSTATE_MASK = 11.chr
-      PURGE_DATA = 12.chr
-
-      SET_BAUDRATE_RESPONSE = 101.chr
-      SET_DATASIZE_RESPONSE = 102.chr
-      SET_PARITY_RESPONSE = 103.chr
-      SET_STOPSIZE_RESPONSE = 104.chr
-      SET_CONTROL_RESPONSE = 105.chr
-      NOTIFY_LINESTATE_RESPONSE = 106.chr
-      NOTIFY_MODEMSTATE_RESPONSE = 107.chr
-      FLOWCONTROL_SUSPEND_RESPONSE = 108.chr
-      SET_LINESTATE_MASK_RESPONSE = 110.chr
-      SET_MODEMSTATE_MASK_RESPONSE = 111.chr
-      PURGE_DATA_RESPONSE = 112.chr
-
-      NONE = 1
-      ODD = 2
-      EVEN = 3
-      MARK = 4
-      SPACE = 5
-
-      SERIAL_PORT_PARAMS = %w{baud data_bits stop_bits parity}.freeze
-
       class << self
-        def open(options)
-          sp = new(options)
+        def open(**kwargs)
+          sp = new(opt**kwargs)
           if block_given?
             begin
               yield sp
@@ -64,9 +30,15 @@ module Net
         end
       end
 
-      def initialize(options = {}, &block)
-        set_modem_params(options.slice(*SERIAL_PORT_PARAMS))
+      attr_reader :baud, :data_bits, :parity, :stop_bits
 
+      def initialize(host, port: 23, baud: 115200, data_bits: 8, parity: :none, stop_bits: 1, &block)
+        set_modem_params(baud: baud, data_bits: data_bits, parity: parity, stop_bits: stop_bits)
+
+        options = {
+          'Host' => host,
+          'Port' => port,
+        }
         options['Binmode'] = true
         options['Telnetmode'] = false
         @telnet = Telnet.new(options, &block)
@@ -81,35 +53,15 @@ module Net
         end
       end
 
-      def get_modem_params
-        @modem_params
-      end
+      def set_modem_params(baud: nil, data_bits: nil, parity: nil, stop_bits: nil)
+        raise ArgumentError, "Parity must be :none, :even, :odd, :mark, or :space" unless parity.nil? || %i{none even odd mark space}.include?(parity)
 
-      def set_modem_params(modem_params)
-        @modem_params = modem_params.dup
-        @modem_params['baud'] = 115200 unless @modem_params.key?('baud')
-        @modem_params['data_bits'] = 8 unless @modem_params.key?('data_bits')
-        @modem_params['stop_bits'] = 1 unless @modem_params.key?('stop_bits')
-        unless @modem_params.key?('parity')
-          @modem_params['parity'] = (data_bits == 8 ? NONE : EVEN)
-        end
+        @baud ||= baud || 115200
+        @data_bits ||= data_bits || 8
+        @parity ||= parity || :none
+        @stop_bits ||= stop_bits || 1
+
         write_modem_params if telnet
-      end
-
-      def baud
-        get_modem_params['baud']
-      end
-
-      def data_bits
-        get_modem_params['data_bits']
-      end
-
-      def stop_bits
-        get_modem_params['stop_bits']
-      end
-
-      def parity
-        get_modem_params['parity']
       end
 
       def sock
@@ -127,6 +79,7 @@ module Net
       def readbyte
         read(1)&.[](0)
       end
+      alias getbyte readbyte
 
       def readpartial(length, outbuf = '')
         loop do
@@ -193,6 +146,15 @@ module Net
         result
       end
 
+      def ready?
+        loop do
+          return true unless @buffer.empty?
+          return false if sock.wait_readable(0).nil?
+          # consume control characters first
+          readpartial(0)
+        end
+      end
+
       def ungetbyte(b)
         @buffer.insert(0, b.chr)
       end
@@ -216,12 +178,46 @@ module Net
 
       private
 
+      COM_PORT_OPTION = 44.chr
+
+      SET_BAUDRATE = 1.chr
+      SET_DATASIZE = 2.chr
+      SET_PARITY = 3.chr
+      SET_STOPSIZE = 4.chr
+      SET_CONTROL = 5.chr
+      NOTIFY_LINESTATE = 6.chr
+      NOTIFY_MODEMSTATE = 7.chr
+      FLOWCONTROL_SUSPEND = 8.chr
+      SET_LINESTATE_MASK = 10.chr
+      SET_MODEMSTATE_MASK = 11.chr
+      PURGE_DATA = 12.chr
+
+      SET_BAUDRATE_RESPONSE = 101.chr
+      SET_DATASIZE_RESPONSE = 102.chr
+      SET_PARITY_RESPONSE = 103.chr
+      SET_STOPSIZE_RESPONSE = 104.chr
+      SET_CONTROL_RESPONSE = 105.chr
+      NOTIFY_LINESTATE_RESPONSE = 106.chr
+      NOTIFY_MODEMSTATE_RESPONSE = 107.chr
+      FLOWCONTROL_SUSPEND_RESPONSE = 108.chr
+      SET_LINESTATE_MASK_RESPONSE = 110.chr
+      SET_MODEMSTATE_MASK_RESPONSE = 111.chr
+      PURGE_DATA_RESPONSE = 112.chr
+
+      NONE = 1
+      ODD = 2
+      EVEN = 3
+      MARK = 4
+      SPACE = 5
+
+      private_constant *(constants - [:WaitReadable])
+
       def write_modem_params
         telnet.write(
           IAC + SB + COM_PORT_OPTION + SET_BAUDRATE + [baud].pack("N") + IAC + SE +
           IAC + SB + COM_PORT_OPTION + SET_DATASIZE + data_bits.chr + IAC + SE +
           IAC + SB + COM_PORT_OPTION + SET_STOPSIZE + stop_bits.chr + IAC + SE +
-          IAC + SB + COM_PORT_OPTION + SET_PARITY + parity.chr + IAC + SE)
+          IAC + SB + COM_PORT_OPTION + SET_PARITY + const_get(parity.upcase, false).chr + IAC + SE)
         sock.flush
       end
     end
