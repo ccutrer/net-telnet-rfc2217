@@ -1,5 +1,4 @@
 require 'net/telnet'
-require 'byebug'
 
 # have to patch Telnet to allow us to read control sequences
 require 'net/telnet/rfc2217/telnet'
