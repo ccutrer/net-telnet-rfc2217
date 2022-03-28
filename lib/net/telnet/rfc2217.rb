@@ -216,7 +216,7 @@ module Net
           IAC + SB + COM_PORT_OPTION + SET_BAUDRATE + [baud].pack("N") + IAC + SE +
           IAC + SB + COM_PORT_OPTION + SET_DATASIZE + data_bits.chr + IAC + SE +
           IAC + SB + COM_PORT_OPTION + SET_STOPSIZE + stop_bits.chr + IAC + SE +
-          IAC + SB + COM_PORT_OPTION + SET_PARITY + const_get(parity.upcase, false).chr + IAC + SE)
+          IAC + SB + COM_PORT_OPTION + SET_PARITY + self.class.const_get(parity.upcase, false).chr + IAC + SE)
         sock.flush
       end
     end
